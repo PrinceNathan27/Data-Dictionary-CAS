@@ -6,7 +6,7 @@ st.title("📘 Data Dictionary Assistant")
 
 @st.cache_data
 def load_data():
-    xls = pd.ExcelFile("final_data_dictionary.xlsx")
+    xls = pd.ExcelFile("data_dictionary.xlsx")
     df = xls.parse("combined_data")
     use_cases = xls.parse("use_cases")
     table_meta = xls.parse("table_meta")
