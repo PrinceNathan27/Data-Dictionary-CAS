@@ -2,118 +2,105 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="📘 Data Dictionary Assistant", layout="wide")
-st.title("📘 Data Dictionary Assistant")
+st.title("📘 Data Dictionary Explorer")
 
 @st.cache_data
 def load_data():
-    xls = pd.ExcelFile("data_dictionary.xlsx")
+    xls = pd.ExcelFile("streamlit_ready_data_dictionary.xlsx")  # <-- OR use "data_dictionary.xlsx"
     df = xls.parse("combined_data")
-    use_cases = xls.parse("use_cases")
-    table_meta = xls.parse("table_meta")
-    return df, use_cases, table_meta
+    mapping = xls.parse("use_cases")
+    meta = xls.parse("table_meta")
+    return df, mapping, meta
 
 df, use_cases, table_meta = load_data()
 
-# ---------- Sidebar Filters ----------
+# Sidebar filters
 st.sidebar.header("🎛️ Filter Columns")
-with st.sidebar.form("filter_form"):
+with st.sidebar.form("filters"):
     col_search = st.text_input("🔍 Column name contains:")
-    schema_sel = st.selectbox("📂 Schema", ["All"] + sorted(df["SCHEMA"].dropna().unique()))
+    schema = st.selectbox("📂 Schema", ["All"] + sorted(df["SCHEMA"].dropna().unique()))
     
-    table_list = sorted(df[df["SCHEMA"] == schema_sel]["TABLE"].dropna().unique()) if schema_sel != "All" else sorted(df["TABLE"].dropna().unique())
-    table_sel = st.selectbox("📁 Table", ["All"] + table_list)
-
+    table_options = sorted(df[df["SCHEMA"] == schema]["TABLE"].unique()) if schema != "All" else sorted(df["TABLE"].dropna().unique())
+    table = st.selectbox("📁 Table", ["All"] + table_options)
+    
     dtypes = sorted(df["DATA_TYPE"].dropna().unique())
-    dtype_sel = st.multiselect("📊 Data Types", dtypes)
+    dtype = st.multiselect("📊 Data Types", dtypes)
 
-    source_sel = st.radio("📌 Source", ["All", "TABLE", "VIEW"])
-    apply = st.form_submit_button("✅ Apply Filters")
-    reset = st.form_submit_button("🔄 Clear All Filters")
+    source = st.radio("📌 Source", ["All", "TABLE", "VIEW"])
+    go = st.form_submit_button("Apply")
+    clear = st.form_submit_button("Clear Filters")
 
-if reset:
+if clear:
     st.experimental_rerun()
 
-# ---------- Filter Logic ----------
-filtered_df = df.copy()
+# Apply filters
+filtered = df.copy()
 if col_search:
-    filtered_df = filtered_df[filtered_df["COLUMN"].str.contains(col_search, case=False, na=False)]
-if schema_sel != "All":
-    filtered_df = filtered_df[filtered_df["SCHEMA"] == schema_sel]
-if table_sel != "All":
-    filtered_df = filtered_df[filtered_df["TABLE"] == table_sel]
-if dtype_sel:
-    filtered_df = filtered_df[filtered_df["DATA_TYPE"].isin(dtype_sel)]
-if source_sel != "All":
-    filtered_df = filtered_df[filtered_df["SOURCE"] == source_sel]
+    filtered = filtered[filtered["COLUMN"].str.contains(col_search, case=False, na=False)]
+if schema != "All":
+    filtered = filtered[filtered["SCHEMA"] == schema]
+if table != "All":
+    filtered = filtered[filtered["TABLE"] == table]
+if dtype:
+    filtered = filtered[filtered["DATA_TYPE"].isin(dtype)]
+if source != "All":
+    filtered = filtered[filtered["SOURCE"] == source]
 
-# ---------- Tabs ----------
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Column Search", "🎯 Use Case Explorer", "📁 Schema Viewer", "💬 Ask Assistant"])
+# Tabs
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Column Search", "🎯 Use Case Explorer", "📁 Table Viewer", "💬 Assistant"])
 
-# ---------- Tab 1: Column Search ----------
 with tab1:
-    st.subheader("🔍 Filtered Columns")
-    st.caption(f"Showing **{len(filtered_df)}** result(s)")
-    for _, row in filtered_df.iterrows():
-        with st.expander(f"📌 `{row['COLUMN']}` from `{row['SCHEMA']}.{row['TABLE']}` ({row['SOURCE']})"):
+    st.subheader("📑 Filtered Columns")
+    st.caption(f"Showing **{len(filtered)}** result(s)")
+    for _, row in filtered.iterrows():
+        with st.expander(f"📌 `{row['COLUMN']}` in `{row['SCHEMA']}.{row['TABLE']}` ({row['SOURCE']})"):
             st.markdown(f"- **Data Type**: `{row['DATA_TYPE']}`")
             st.markdown(f"- **Description**: {row['DESCRIPTION'] or '—'}")
-            if pd.notna(row["LONG_DESC"]):
-                st.markdown(f"- **Long Description**: {row['LONG_DESC']}")
+            st.markdown(f"- **Long Description**: {row['LONG_DESC'] or '—'}")
+    
+    st.download_button("📥 Download Results", data=filtered.to_csv(index=False), file_name="filtered_columns.csv")
 
-    st.download_button(
-        label="📥 Download Results",
-        data=filtered_df.to_csv(index=False).encode("utf-8"),
-        file_name="filtered_data_dictionary.csv"
-    )
-
-# ---------- Tab 2: Use Case Explorer ----------
 with tab2:
-    st.subheader("🎯 Explore by Business Use Case")
-    use_case = st.selectbox("Choose a Use Case", sorted(use_cases["USE_CASE"].dropna().unique()))
-    matched = use_cases[use_cases["USE_CASE"] == use_case]
+    st.subheader("🎯 Explore by Use Case")
+    selected_case = st.selectbox("Choose a use case", sorted(use_cases["USE_CASE"].dropna().unique()))
+    matches = use_cases[use_cases["USE_CASE"] == selected_case]
 
-    for _, row in matched.iterrows():
-        st.markdown(f"### 🔹 {row['USE_CASE']}")
-        st.markdown(f"- **Category**: `{row['CATEGORY']}`")
-        st.markdown(f"- **Description**: {row['USE_DESC']}")
-        st.markdown(f"- **Table**: `{row['TABLE']}`")
-        st.markdown(f"- **Column(s)**: `{row['COLUMN']}`")
+    for _, row in matches.iterrows():
+        st.markdown(f"**🔹 {row['USE_CASE']}**")
+        st.markdown(f"- 📁 Table: `{row['TABLE']}`")
+        st.markdown(f"- 🔍 Field(s): `{row['COLUMN']}`")
+        st.markdown(f"- 📘 Description: {row['USE_DESC']}")
         st.markdown("---")
 
-# ---------- Tab 3: Schema/Table Viewer ----------
 with tab3:
-    st.subheader("📁 Browse Schema & Table")
-    schema = st.selectbox("Select Schema", sorted(df["SCHEMA"].dropna().unique()), key="schema_select")
-    tables = sorted(df[df["SCHEMA"] == schema]["TABLE"].dropna().unique())
-    table = st.selectbox("Select Table", tables, key="table_select")
+    st.subheader("📁 Table Browser")
+    sel_schema = st.selectbox("Select schema", sorted(df["SCHEMA"].dropna().unique()))
+    table_list = sorted(df[df["SCHEMA"] == sel_schema]["TABLE"].dropna().unique())
+    sel_table = st.selectbox("Select table", table_list)
 
-    view = df[(df["SCHEMA"] == schema) & (df["TABLE"] == table)]
-    st.markdown(f"### 📋 Columns in `{schema}.{table}`")
-    st.dataframe(view[["COLUMN", "DATA_TYPE", "DESCRIPTION", "SOURCE"]], use_container_width=True)
+    table_view = df[(df["SCHEMA"] == sel_schema) & (df["TABLE"] == sel_table)]
+    st.markdown(f"### 📋 Columns in `{sel_schema}.{sel_table}`")
+    st.dataframe(table_view[["COLUMN", "DATA_TYPE", "DESCRIPTION", "SOURCE"]])
 
-    meta = table_meta[table_meta["TABLE"] == table]
-    if not meta.empty:
-        st.markdown("#### 📘 Table Description")
-        st.markdown(f"- **Business**: {meta['BUSINESS: What it does'].values[0]}")
-        st.markdown(f"- **Technical**: {meta['TECHNICAL: How it works'].values[0]}")
+    table_info = table_meta[table_meta["TABLE"] == sel_table]
+    if not table_info.empty:
+        st.markdown("### 🧠 Table Info")
+        st.markdown(f"- **Business**: {table_info['BUSINESS: What it does'].values[0]}")
+        st.markdown(f"- **Technical**: {table_info['TECHNICAL: How it works'].values[0]}")
 
-# ---------- Tab 4: Assistant Chat ----------
 with tab4:
-    st.subheader("💬 Ask Assistant")
-    st.caption("Ask something like: *“Which columns help track donations?”* or *“User engagement fields?”*")
-    query = st.text_input("Your question:")
-    
+    st.subheader("💬 Assistant")
+    query = st.text_input("Ask (e.g., donations, user sessions, etc.)")
     if query:
-        suggestion = df[
+        results = df[
             df["DESCRIPTION"].str.contains(query, case=False, na=False) |
             df["LONG_DESC"].str.contains(query, case=False, na=False)
         ]
-
-        if not suggestion.empty:
-            st.success(f"🔍 Found {len(suggestion)} potential columns:")
-            for _, row in suggestion.head(10).iterrows():
-                with st.expander(f"{row['COLUMN']} in `{row['SCHEMA']}.{row['TABLE']}`"):
-                    st.markdown(f"- **Data Type:** `{row['DATA_TYPE']}`")
-                    st.markdown(f"- **Description:** {row['DESCRIPTION'] or row['LONG_DESC']}")
+        if results.empty:
+            st.warning("🤖 No matches found. Try another keyword.")
         else:
-            st.warning("🤖 I couldn’t find a match. Try rephrasing your question.")
+            st.success(f"Found {len(results)} match(es)")
+            for _, row in results.head(10).iterrows():
+                with st.expander(f"💡 `{row['COLUMN']}` in `{row['SCHEMA']}.{row['TABLE']}`"):
+                    st.markdown(f"- **Data Type**: `{row['DATA_TYPE']}`")
+                    st.markdown(f"- **Description**: {row['DESCRIPTION'] or row['LONG_DESC'] or '—'}")
