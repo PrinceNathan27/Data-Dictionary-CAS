@@ -137,7 +137,7 @@ with tab3:
 # ---------- Tab 4: Assistant Chat ----------
 with tab4:
     st.subheader("💬 Ask Assistant")
-    st.caption("Try: *“donation-related columns”* or *“user language preferences”*")
+    st.caption("Try: *“Button clicked”* or *“Geo location”*")
     query = st.text_input("Your question:")
     
     if query:
