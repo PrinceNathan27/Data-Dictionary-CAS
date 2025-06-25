@@ -7,13 +7,11 @@ st.title("📘 Data Dictionary Assistant")
 @st.cache_data
 def load_data():
     xls = pd.ExcelFile("data_dictionary.xlsx")
-    
-    # Load and clean table/view column metadata
     df = xls.parse("(Updated)tables_with_columns")
     views = xls.parse("view_fields_audit")
     mapping = xls.parse("Data Mapping")
     meta = xls.parse("(Updated)tables", skiprows=2)
-    
+
     df = df.rename(columns={
         "TABLE_SCHEMA": "SCHEMA", "TABLE_NAME": "TABLE", "COLUMN_NAME": "COLUMN",
         "DATA_TYPE": "DATA_TYPE", "DESCRIPTIONS": "DESCRIPTION", "DESCRIPTIONS.1": "LONG_DESC"
@@ -33,21 +31,17 @@ def load_data():
         views[["SCHEMA", "TABLE", "COLUMN", "DATA_TYPE", "DESCRIPTION", "LONG_DESC", "SOURCE"]]
     ], ignore_index=True)
 
-    # Clean mapping use case sheet
     mapping = mapping.rename(columns={
         "Fields Needed": "USE_CASE", "Description": "USE_DESC", "Category": "CATEGORY",
         "Table Name - FR": "TABLE", "Field Name - FR": "COLUMN"
     })
 
-    # Fix column names for metadata
-    meta.columns = meta.iloc[0]  # use row 0 as header
+    meta.columns = meta.iloc[0]
     meta = meta.drop(index=meta.index[0])
-    meta.columns = [str(c).strip().upper() for c in meta.columns]  # normalize
-    meta = meta.rename(columns={"TABLE_NAME": "TABLE", "TABLE_SCHEMA": "SCHEMA"})
+    meta = meta.rename(columns={"TABLE_SCHEMA": "SCHEMA", "TABLE_NAME": "TABLE"})
 
     return combined, mapping, meta
 
-# Load data
 df, use_cases, table_meta = load_data()
 
 # ---------- Sidebar Filters ----------
@@ -127,11 +121,11 @@ with tab3:
     st.markdown(f"### 📋 Columns in `{schema}.{table}`")
     st.dataframe(view[["COLUMN", "DATA_TYPE", "DESCRIPTION", "SOURCE"]], use_container_width=True)
 
-    meta = table_meta[table_meta["TABLE"] == table]
+    meta = table_meta[table_meta["Dataset name"] == table]
     if not meta.empty:
         st.markdown("#### 📘 Table Description")
-        st.markdown(f"- **Business**: {meta['BUSINESS: WHAT IT DOES'].values[0]}")
-        st.markdown(f"- **Technical**: {meta['TECHNICAL: HOW IT WORKS'].values[0]}")
+        st.markdown(f"- **Business**: {meta['BUSINESS: What it does'].values[0]}")
+        st.markdown(f"- **Technical**: {meta['TECHNICAL: How it works'].values[0]}")
 
 # ---------- Tab 4: Assistant Chat ----------
 with tab4:
