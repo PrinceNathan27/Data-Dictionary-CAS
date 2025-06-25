@@ -80,7 +80,7 @@ with tab2:
         st.markdown(f"- **Column(s)**: `{row['COLUMN']}`")
         st.markdown("---")
 
-# ---------- Tab 3: Schema/Table Explorer ----------
+# ---------- Tab 3: Schema/Table Viewer ----------
 with tab3:
     st.subheader("📁 Browse Schema & Table")
     schema = st.selectbox("Select Schema", sorted(df["SCHEMA"].dropna().unique()), key="schema_select")
@@ -114,6 +114,6 @@ with tab4:
             for _, row in suggestion.head(10).iterrows():
                 with st.expander(f"{row['COLUMN']} in `{row['SCHEMA']}.{row['TABLE']}`"):
                     st.markdown(f"- **Data Type:** `{row['DATA_TYPE']}`")
-                    st.markdown(f"- **Description:** {row['DESCRIPTION'] or '—'}")
+                    st.markdown(f"- **Description:** {row['DESCRIPTION'] or row['LONG_DESC']}")
         else:
             st.warning("🤖 I couldn’t find a match. Try rephrasing your question.")
