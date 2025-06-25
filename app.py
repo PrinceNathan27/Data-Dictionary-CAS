@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="📘 Data Dictionary", layout="wide")
-st.title("📘 Data Dictionary Explorer")
+st.set_page_config(page_title="📘 Data Dictionary Portal", layout="wide")
+st.title("📘 Data Dictionary Portal")
 
 @st.cache_data
 def load_data():
@@ -16,7 +16,7 @@ def load_data():
 
 data = load_data()
 
-# Prepare tables
+# Prepare Tables + Views
 tables = data["columns"].rename(columns={
     "TABLE_SCHEMA": "SCHEMA", "TABLE_NAME": "TABLE", "COLUMN_NAME": "COLUMN",
     "DATA_TYPE": "DATA_TYPE", "DESCRIPTIONS": "DESCRIPTION", "DESCRIPTIONS.1": "LONG_DESC"
@@ -32,67 +32,77 @@ views["SOURCE"] = "VIEW"
 
 df = pd.concat([tables, views], ignore_index=True)
 
+# Clean mapping and metadata
 mapping = data["mapping"].rename(columns={
     "Fields Needed": "USE_CASE", "Description": "USE_DESC", "Category": "CATEGORY",
     "Table Name - FR": "TABLE", "Field Name - FR": "COLUMN"
 })
-
 table_meta = data["table_meta"].rename(columns={"TABLE_SCHEMA": "SCHEMA", "TABLE_NAME": "TABLE"})
 
-# --- TABS ---
-tab1, tab2, tab3 = st.tabs(["🔍 Column Search", "🎯 Use Case", "📁 Browse by Table"])
+# --- Sidebar Filters ---
+st.sidebar.header("🎛️ Column Filter")
+col_filter = st.sidebar.text_input("🔍 Column name contains")
+schema_filter = st.sidebar.multiselect("📂 Schema", sorted(df["SCHEMA"].dropna().unique()))
+table_filter = st.sidebar.multiselect("📁 Table", sorted(df["TABLE"].dropna().unique()))
+source_filter = st.sidebar.radio("📌 Source", ["All", "TABLE", "VIEW"])
 
-# --- TAB 1: COLUMN SEARCH ---
+# --- Filtered Results ---
+filtered = df.copy()
+if col_filter:
+    filtered = filtered[filtered["COLUMN"].str.contains(col_filter, case=False, na=False)]
+if schema_filter:
+    filtered = filtered[filtered["SCHEMA"].isin(schema_filter)]
+if table_filter:
+    filtered = filtered[filtered["TABLE"].isin(table_filter)]
+if source_filter != "All":
+    filtered = filtered[filtered["SOURCE"] == source_filter]
+
+st.markdown("## 🔍 Filtered Column Results")
+st.write(f"Showing **{len(filtered)}** results")
+
+for _, row in filtered.iterrows():
+    with st.expander(f"📌 `{row['COLUMN']}` from `{row['SCHEMA']}.{row['TABLE']}` ({row['SOURCE']})"):
+        st.markdown(f"**Data Type:** `{row['DATA_TYPE']}`")
+        st.markdown(f"**Short Description:** {row['DESCRIPTION'] or '—'}")
+        if row['LONG_DESC']:
+            st.markdown(f"**Technical Description:** {row['LONG_DESC']}")
+
+st.download_button("📥 Download Filtered Results", data=filtered.to_csv(index=False).encode("utf-8"),
+                   file_name="filtered_data_dictionary.csv")
+
+# --- Tabs Section ---
+st.markdown("---")
+st.markdown("## 🧭 Additional Explorers")
+
+tab1, tab2 = st.tabs(["🎯 Use Case Explorer", "📁 Browse by Table"])
+
+# --- Tab 1: Use Case Explorer ---
 with tab1:
-    st.subheader("🔍 Search by Column")
-    search = st.text_input("Enter column name (partial OK)")
-    source_filter = st.radio("Source Type", ["All", "TABLE", "VIEW"], horizontal=True)
+    st.subheader("🎯 Business Use Case → Suggested Columns")
+    use_case = st.selectbox("Select Use Case", mapping["USE_CASE"].dropna().unique())
+    case_rows = mapping[mapping["USE_CASE"] == use_case]
 
-    results = df.copy()
-    if search:
-        results = results[results["COLUMN"].str.contains(search, case=False, na=False)]
-    if source_filter != "All":
-        results = results[results["SOURCE"] == source_filter]
-
-    st.write(f"🔎 Found **{len(results)}** results")
-
-    for _, row in results.iterrows():
-        with st.expander(f"📌 `{row['COLUMN']}` in `{row['SCHEMA']}.{row['TABLE']}`"):
-            st.markdown(f"- **Source**: `{row['SOURCE']}`")
-            st.markdown(f"- **Data Type**: `{row['DATA_TYPE']}`")
-            st.markdown(f"- **Short Description**: {row['DESCRIPTION'] or 'N/A'}")
-            if row['LONG_DESC']:
-                st.markdown(f"- **Detailed Explanation**: {row['LONG_DESC']}")
-
-    st.download_button("📥 Download Results", data=results.to_csv(index=False).encode("utf-8"),
-                       file_name="column_search_results.csv")
-
-# --- TAB 2: USE CASE SEARCH ---
-with tab2:
-    st.subheader("🎯 Search by Fields Needed / Business Use Case")
-    use_case = st.selectbox("Choose a business use case", mapping["USE_CASE"].dropna().unique())
-    selected = mapping[mapping["USE_CASE"] == use_case]
-
-    for _, row in selected.iterrows():
+    for _, row in case_rows.iterrows():
         st.markdown(f"### 🔹 {row['USE_CASE']}")
         st.markdown(f"- **Category**: `{row['CATEGORY']}`")
         st.markdown(f"- **Use Description**: {row['USE_DESC']}")
-        st.markdown(f"- **Table**: `{row['TABLE']}`")
-        st.markdown(f"- **Column(s)**:\n```\n{row['COLUMN']}\n```")
+        st.markdown(f"- **Suggested Table**: `{row['TABLE']}`")
+        st.markdown(f"- **Suggested Column(s)**:\n```\n{row['COLUMN']}\n```")
         st.markdown("---")
 
-# --- TAB 3: BROWSE BY SCHEMA/TABLE ---
-with tab3:
-    st.subheader("📁 Explore by Table")
-    schema_choice = st.selectbox("Select Schema", sorted(df["SCHEMA"].dropna().unique()))
-    table_choice = st.selectbox("Select Table", sorted(df[df["SCHEMA"] == schema_choice]["TABLE"].unique()))
+# --- Tab 2: Schema/Table Explorer ---
+with tab2:
+    st.subheader("📁 Schema + Table Explorer")
+    schema_sel = st.selectbox("Select Schema", sorted(df["SCHEMA"].dropna().unique()))
+    table_sel = st.selectbox("Select Table", sorted(df[df["SCHEMA"] == schema_sel]["TABLE"].dropna().unique()))
 
-    filtered = df[(df["SCHEMA"] == schema_choice) & (df["TABLE"] == table_choice)]
-    st.markdown(f"### Columns in `{schema_choice}.{table_choice}`")
-    st.dataframe(filtered[["COLUMN", "DATA_TYPE", "DESCRIPTION", "SOURCE"]], use_container_width=True)
+    display_df = df[(df["SCHEMA"] == schema_sel) & (df["TABLE"] == table_sel)]
+    st.markdown(f"### 📋 Columns in `{schema_sel}.{table_sel}`")
+    st.dataframe(display_df[["COLUMN", "DATA_TYPE", "DESCRIPTION", "SOURCE"]], use_container_width=True)
 
-    meta = table_meta[table_meta["TABLE"] == table_choice]
+    # Show table-level metadata
+    meta = table_meta[table_meta["TABLE"] == table_sel]
     if not meta.empty:
-        st.markdown("#### 📘 Table Description")
-        st.markdown(f"**Business**: {meta['BUSINESS: What it does'].values[0]}")
-        st.markdown(f"**Technical**: {meta['TECHNICAL: How it works'].values[0]}")
+        st.markdown("#### 🧾 Table Description")
+        st.write(f"**Business:** {meta['BUSINESS: What it does'].values[0]}")
+        st.write(f"**Technical:** {meta['TECHNICAL: How it works'].values[0]}")
